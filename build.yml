@@ -1,0 +1,53 @@
+name: Build mod
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unzip any zip files in the repo
+        run: |
+          for z in $(find . -name '*.zip' -not -path './.git/*'); do
+            echo "Unzipping $z"
+            unzip -oq "$z" -d "$(dirname "$z")/unzipped"
+          done
+
+      - name: Find the mod folder (the one containing settings.gradle)
+        id: find
+        run: |
+          FILE=$(find . -name settings.gradle -not -path './.git/*' | head -n 1)
+          if [ -z "$FILE" ]; then
+            echo "No settings.gradle found anywhere in the repo. Files present:"
+            find . -not -path './.git/*' | head -50
+            exit 1
+          fi
+          DIR=$(dirname "$FILE")
+          echo "Mod folder: $DIR"
+          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Gradle 8.8
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.8
+
+      - name: Build
+        working-directory: ${{ steps.find.outputs.dir }}
+        run: gradle build --no-daemon
+
+      - name: Upload jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: luckyblockmod-1.20.1-forge
+          path: ${{ steps.find.outputs.dir }}/build/libs/*.jar
